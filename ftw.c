@@ -27,7 +27,43 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
 #include <unistd.h>
 #include <dirent.h>
 #include <stdbool.h>
+#ifdef _WIN32
+#define FNM_NOMATCH 1
+static int fnmatch(const char *pattern, const char *string, int flags)
+{
+	(void)flags;
+	while (*pattern) {
+		if (*pattern == '*') {
+			if (!*++pattern) {
+				return 0;
+			}
+			while (*string) {
+				if (fnmatch(pattern, string, 0) == 0) {
+					return 0;
+				}
+				string++;
+			}
+			return FNM_NOMATCH;
+		} else if (*pattern == '?') {
+			if (!*string) {
+				return FNM_NOMATCH;
+			}
+			pattern++;
+			string++;
+		} else {
+			if (*pattern != *string) {
+				return FNM_NOMATCH;
+			}
+			pattern++;
+			string++;
+		}
+	}
+	return *string ? FNM_NOMATCH : 0;
+}
+#else
 #include <fnmatch.h>
+#endif
+
 
 #include "export.h"
 #include "mktorrent.h" /* DIRSEP_CHAR */
