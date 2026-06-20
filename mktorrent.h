@@ -4,6 +4,8 @@
 #ifdef _WIN32
 #define DIRSEP      "\\"
 #define DIRSEP_CHAR '\\'
+#define srandom srand
+#define random rand
 #else
 #define DIRSEP      "/"
 #define DIRSEP_CHAR '/'
