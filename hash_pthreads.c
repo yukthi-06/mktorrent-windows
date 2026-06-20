@@ -74,6 +74,7 @@ struct queue {
 	unsigned int done;
 	unsigned int pieces;
 	unsigned int pieces_hashed;
+	int stop_progress;
 };
 
 static struct piece *get_free(struct queue *q, size_t piece_length)
@@ -169,16 +170,19 @@ static void free_buffers(struct queue *q)
 static void *print_progress(void *data)
 {
 	struct queue *q = data;
-	int err;
 	struct timespec t;
 
 	t.tv_sec = PROGRESS_PERIOD / 1000000;
 	t.tv_nsec = PROGRESS_PERIOD % 1000000 * 1000;
 
-	err = pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
-	FATAL_IF(err, "cannot set thread cancel type: %s\n", strerror(err));
-
 	while (1) {
+		pthread_mutex_lock(&q->mutex_free);
+		if (q->stop_progress) {
+			pthread_mutex_unlock(&q->mutex_free);
+			break;
+		}
+		pthread_mutex_unlock(&q->mutex_free);
+
 		/* print progress and flush the buffer immediately */
 		printf("\rHashed %u of %u pieces.", q->pieces_hashed, q->pieces);
 		fflush(stdout);
@@ -278,7 +282,7 @@ EXPORT unsigned char *make_hash(struct metafile *m)
 		PTHREAD_MUTEX_INITIALIZER,
 		PTHREAD_COND_INITIALIZER,
 		PTHREAD_COND_INITIALIZER,
-		0, 0, 0
+		0, 0, 0, 0
 	};
 	pthread_t print_progress_thread;	/* progress printer thread */
 	pthread_t *workers;
@@ -306,10 +310,6 @@ EXPORT unsigned char *make_hash(struct metafile *m)
 	/* read files and feed pieces to the workers */
 	read_files(m, &q, hash_string);
 
-	/* we're done so stop printing our progress. */
-	err = pthread_cancel(print_progress_thread);
-	FATAL_IF(err, "cannot cancel thread: %s\n", strerror(err));
-
 	/* inform workers we're done */
 	set_done(&q);
 
@@ -320,6 +320,11 @@ EXPORT unsigned char *make_hash(struct metafile *m)
 	}
 
 	free(workers);
+
+	/* stop the progress printing thread */
+	pthread_mutex_lock(&q.mutex_free);
+	q.stop_progress = 1;
+	pthread_mutex_unlock(&q.mutex_free);
 
 	/* the progress printer should be done by now too */
 	err = pthread_join(print_progress_thread, NULL);
