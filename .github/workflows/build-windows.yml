@@ -22,7 +22,7 @@ jobs:
 
       - name: Compile mktorrent
         run: |
-          make CC=x86_64-w64-mingw32-gcc USE_PTHREADS=1
+          make CC=x86_64-w64-mingw32-gcc USE_PTHREADS=1 LDFLAGS="-static"
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
